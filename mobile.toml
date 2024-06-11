@@ -1,0 +1,5 @@
+[app]
+name = "androidapp"
+stylized-name = "Android App"
+identifier = "example.com"
+template-pack = "wry"
