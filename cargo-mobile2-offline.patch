@@ -1,0 +1,12 @@
+diff --git a/src/util/cargo.rs b/src/util/cargo.rs
+index 9f6de7a..a69c30b 100644
+--- a/src/util/cargo.rs
++++ b/src/util/cargo.rs
+@@ -113,6 +113,7 @@ impl<'a> CargoCommand<'a> {
+         if self.release {
+             args.push("--release".into());
+         }
++        args.push("--offline".into());
+ 
+         duct::cmd("cargo", args)
+             .vars(env.explicit_env())
