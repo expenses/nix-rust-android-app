@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    android-nixpkgs.url = "github:tadfisher/android-nixpkgs";
+    android-nixpkgs.url = "github:HPRIOR/android-nixpkgs";
     gradle2nix-flake.url = "github:expenses/gradle2nix/overrides-fix";
     flake-utils.url = "github:numtide/flake-utils";
     crane = {
@@ -20,6 +20,7 @@
     , flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
+        build-tools-version = "30.0.3";
         android-sdk = android-nixpkgs.sdk.${system} (sdkPkgs:
           with sdkPkgs; [
             cmdline-tools-latest
@@ -29,6 +30,8 @@
             ndk-bundle
             sdkPkgs.build-tools-30-0-3
           ]);
+
+        build-tools-dir = "${android-sdk}/share/android-sdk/build-tools/${build-tools-version}";
 
         pkgs = nixpkgs.legacyPackages.${system};
 
@@ -115,9 +118,11 @@
           default = mkShellWithHook "";
           init = mkShellWithHook "cp -rs ${cargo-config}/{.cargo,gen}";
           gen = mkShellWithHook "gradle2nix -p gen/android build -o .";
+          build = mkShellWithHook "./gen/android/gradlew -p gen/android build";
+          keygen = mkShellWithHook "keytool -genkey -v -keystore my-release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias my-alias";
         };
 
-        packages = {
+        packages = rec {
           inherit cargo-mobile2 cargo-build cargo-config patched-gradle-lock;
           apk = with pkgs;
             with lib;
@@ -156,7 +161,7 @@
               version = "1.0";
               lockFile = patched-gradle-lock;
               gradleBuildFlags = [ "build" "--stacktrace" "--info" ];
-              src = ./.;
+              src = lib.sourceFilesBySuffices ( lib.cleanSource ./.) [ ".rs" ".toml"];
               nativeBuildInputs = [ android-sdk rust-toolchain cargo-mobile2 ];
               preBuild = ''
                 cp -rs ${cargo-config}/{.cargo,gen} .
@@ -169,6 +174,15 @@
               inherit (environment) ANDROID_HOME NDK_HOME CARGO_HOME;
               overrides = aapt2LinuxJars;
             };
+          # https://developer.android.com/build/building-cmdline#sign_cmdline
+          aligned = pkgs.runCommand "aligned.apk" {} ''
+            ${build-tools-dir}/zipalign -f -v -p 4 ${apk}/universal/release/app-universal-release-unsigned.apk aligned.apk
+            mv aligned.apk $out
+          '';
+          #signed = pkgs.runCommand "signed.apk" {} ''
+          #  ${build-tools-dir}/apksigner sign --ks ${./my-release-key.jks} --ks-pass 'pass:password' --out $out ${aligned}
+          #  ${build-tools-dir}/apksigner verify $out
+          #'';
         };
       });
 }
