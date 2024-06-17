@@ -465,6 +465,12 @@
       "hash": "sha256-tEQqhPw5ftsukIof33E8aufTqHZBoJ7hPRDsjuELMx8="
     }
   },
+  "androidx.lifecycle:lifecycle-runtime:2.0.0": {
+    "lifecycle-runtime-2.0.0.pom": {
+      "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-runtime/2.0.0/lifecycle-runtime-2.0.0.pom",
+      "hash": "sha256-qSpG+nrsisMmpdV4c0otW2MgaXaZa54GyuFxs1sKtt4="
+    }
+  },
   "androidx.lifecycle:lifecycle-viewmodel:2.5.1": {
     "lifecycle-viewmodel-2.5.1.aar": {
       "url": "https://dl.google.com/dl/android/maven2/androidx/lifecycle/lifecycle-viewmodel/2.5.1/lifecycle-viewmodel-2.5.1.aar",
