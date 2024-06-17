@@ -2,16 +2,9 @@
 target/
 **/*.rs.bk
 
-.cargo
-
-gen/android/app/src/main/kotlin/androidapp/Ipc.kt
-gen/android/app/src/main/kotlin/androidapp/Logger.kt
-gen/android/app/src/main/kotlin/androidapp/PermissionHelper.kt
-gen/android/app/src/main/kotlin/androidapp/RustWebChromeClient.kt
-gen/android/app/src/main/kotlin/androidapp/RustWebView.kt
-gen/android/app/src/main/kotlin/androidapp/RustWebViewClient.kt
-gen/android/app/src/main/kotlin/androidapp/WryActivity.kt
-gen/android/app/src/main/kotlin/androidapp/proguard-wry.pro
+# cargo-mobile2
+.cargo/
+/gen
 
 # macOS
 .DS_Store

@@ -4,8 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     android-nixpkgs.url = "github:tadfisher/android-nixpkgs";
-    gradle2nix-flake.url =
-      "github:expenses/gradle2nix/e54eff2fad6ef319e7d23b866900b3a1951bdbc7";
+    gradle2nix-flake.url = "github:expenses/gradle2nix/overrides-fix";
     flake-utils.url = "github:numtide/flake-utils";
     crane = {
       url = "github:ipetkov/crane";
@@ -59,8 +58,8 @@
           CARGO_HOME = "${cargo-home}";
         };
 
-        # Generate a .cargo/config.toml for a particular apk. Ideally this would generate everything else in `gen` too.
-        make-cargo-config = cargo-toml: mobile-toml:
+        # Generates .cargo and gen.
+        gen-cargo-mobile = cargo-toml: mobile-toml:
           pkgs.runCommand "cargo-config" {
             inherit (environment) ANDROID_HOME NDK_HOME;
             buildInputs = [
@@ -70,14 +69,17 @@
               (pkgs.writeScriptBin "rustup" "echo")
             ];
           } ''
-            ln -s ${cargo-toml} Cargo.toml
+            # Needs to be owned by the build user for whatever reason
+            cp ${cargo-toml} Cargo.toml
+            chmod +w Cargo.toml
             ln -s ${mobile-toml} mobile.toml
+            touch .first-init
             cargo-mobile init -yvv
             mkdir $out
-            mv .cargo $out
+            mv .cargo gen $out
           '';
 
-        cargo-config = make-cargo-config ./Cargo.toml ./mobile.toml;
+        cargo-config = gen-cargo-mobile ./Cargo.toml ./mobile.toml;
 
         inherit (gradle2nix-flake.packages.${system}) gradle2nix;
 
@@ -91,7 +93,7 @@
             shellHook = hook;
           };
 
-        gradleLockPath = ./gen/android/gradle.lock;
+        gradleLockPath = ./gradle.lock;
 
         patch-lock-file = file: patches:
           let
@@ -111,13 +113,8 @@
       in {
         devShells = {
           default = mkShellWithHook "";
-          update = mkShellWithHook ''
-            rm -rf gen
-            cargo mobile init -yvv
-          '';
-          build = mkShellWithHook ''
-            cargo android apk build
-          '';
+          init = mkShellWithHook "cargo-mobile init";
+          gen = mkShellWithHook "gradle2nix -p gen/android build -o .";
         };
 
         packages = {
@@ -125,8 +122,8 @@
           apk = with pkgs;
             with lib;
             let
-              gradleLockPath = patched-gradle-lock;
-              gradleLock = builtins.fromJSON (builtins.readFile gradleLockPath);
+              gradleLock =
+                builtins.fromJSON (builtins.readFile patched-gradle-lock);
 
               patchJars = moduleFilter: artifactFilter: args: f:
                 let
@@ -157,19 +154,19 @@
             in gradle2nix-flake.builders.${system}.buildGradlePackage rec {
               pname = "android-app";
               version = "1.0";
-              lockFile = gradleLockPath;
+              lockFile = patched-gradle-lock;
               gradleBuildFlags = [ "build" "--stacktrace" "--info" ];
               src = ./.;
               nativeBuildInputs =
                 (with pkgs; [ android-sdk rust-toolchain cargo-mobile2 ]);
               preBuild = ''
-                mkdir -p .cargo
-                cat ${cargo-config}/.cargo/config.toml > .cargo/config.toml
+                cp -rs ${cargo-config}/.cargo .cargo
+                cp -rs ${cargo-config}/gen gen
+                chmod -R +w gen .cargo
                 cd gen/android
               '';
               postBuild = ''
-                mkdir -p $out
-                cp -r app/build/outputs/apk $out
+                mv app/build/outputs/apk $out
               '';
               inherit (environment) ANDROID_HOME NDK_HOME CARGO_HOME;
               overrides = aapt2LinuxJars;
