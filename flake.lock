@@ -170,8 +170,8 @@
       },
       "original": {
         "owner": "expenses",
+        "ref": "overrides-fix",
         "repo": "gradle2nix",
-        "rev": "e54eff2fad6ef319e7d23b866900b3a1951bdbc7",
         "type": "github"
       }
     },

@@ -113,7 +113,7 @@
       in {
         devShells = {
           default = mkShellWithHook "";
-          init = mkShellWithHook "cargo-mobile init";
+          init = mkShellWithHook "cp -rs ${cargo-config}/{.cargo,gen}";
           gen = mkShellWithHook "gradle2nix -p gen/android build -o .";
         };
 
@@ -157,11 +157,9 @@
               lockFile = patched-gradle-lock;
               gradleBuildFlags = [ "build" "--stacktrace" "--info" ];
               src = ./.;
-              nativeBuildInputs =
-                (with pkgs; [ android-sdk rust-toolchain cargo-mobile2 ]);
+              nativeBuildInputs = [ android-sdk rust-toolchain cargo-mobile2 ];
               preBuild = ''
-                cp -rs ${cargo-config}/.cargo .cargo
-                cp -rs ${cargo-config}/gen gen
+                cp -rs ${cargo-config}/{.cargo,gen} .
                 chmod -R +w gen .cargo
                 cd gen/android
               '';
