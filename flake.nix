@@ -31,24 +31,28 @@
             sdkPkgs.build-tools-30-0-3
           ]);
 
-        build-tools-dir = "${android-sdk}/share/android-sdk/build-tools/${build-tools-version}";
+        build-tools-dir =
+          "${android-sdk}/share/android-sdk/build-tools/${build-tools-version}";
 
         pkgs = nixpkgs.legacyPackages.${system};
 
+        rust-targets = [
+          "aarch64-linux-android"
+          "armv7-linux-androideabi"
+          "i686-linux-android"
+          "x86_64-linux-android"
+        ];
+
         rust-toolchain = with fenix.packages.${system};
-          combine [
-            stable.cargo
-            stable.rustc
-            targets."aarch64-linux-android".stable.toolchain
-            targets."armv7-linux-androideabi".stable.toolchain
-            targets."i686-linux-android".stable.toolchain
-            targets."x86_64-linux-android".stable.toolchain
-          ];
+          combine ([ stable.cargo stable.rustc ]
+            ++ (builtins.map (target: targets.${target}.stable.toolchain)
+              rust-targets));
 
         cargo-mobile2 = pkgs.callPackage ./nix/patched-cargo-mobile2.nix { };
 
-        cargo-build =
-          (crane.mkLib pkgs).vendorCargoDeps { cargoLock = ./Cargo.lock; };
+        crane-lib = (crane.mkLib pkgs).overrideToolchain rust-toolchain;
+
+        cargo-build = crane-lib.vendorCargoDeps { cargoLock = ./Cargo.lock; };
 
         cargo-home = pkgs.symlinkJoin {
           name = "cargo-home";
@@ -84,6 +88,14 @@
 
         cargo-config = gen-cargo-mobile ./Cargo.toml ./mobile.toml;
 
+        # Concat the config.toml from the vendored deps 
+        crane-vendor-dir = with pkgs;
+          runCommand "crane-vendor-dir" { } ''
+            cp -r ${cargo-build} $out
+            chmod +w $out/config.toml
+            cat ${cargo-config}/.cargo/config.toml >> $out/config.toml
+          '';
+
         inherit (gradle2nix-flake.packages.${system}) gradle2nix;
 
         mkShellWithHook = hook:
@@ -113,17 +125,22 @@
             hash = "sha256-QkHfqU5xHUNfKaRgSj4t5cSqPBZeI70Ga+b8H8QwlWk=";
           };
         };
+
+        clean-src = with pkgs;
+          lib.sourceFilesBySuffices (lib.cleanSource ./.) [ ".rs" ".toml" ];
       in {
         devShells = {
           default = mkShellWithHook "";
           init = mkShellWithHook "cp -rs ${cargo-config}/{.cargo,gen}";
           gen = mkShellWithHook "gradle2nix -p gen/android build -o .";
           build = mkShellWithHook "./gen/android/gradlew -p gen/android build";
-          keygen = mkShellWithHook "keytool -genkey -v -keystore my-release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias my-alias";
+          keygen = mkShellWithHook
+            "keytool -genkey -v -keystore my-release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias my-alias";
         };
 
         packages = rec {
-          inherit cargo-mobile2 cargo-build cargo-config patched-gradle-lock;
+          inherit cargo-mobile2 cargo-build cargo-config patched-gradle-lock
+            crane-vendor-dir;
           apk = with pkgs;
             with lib;
             let
@@ -161,7 +178,7 @@
               version = "1.0";
               lockFile = patched-gradle-lock;
               gradleBuildFlags = [ "build" "--stacktrace" "--info" ];
-              src = lib.sourceFilesBySuffices ( lib.cleanSource ./.) [ ".rs" ".toml"];
+              src = clean-src;
               nativeBuildInputs = [ android-sdk rust-toolchain cargo-mobile2 ];
               preBuild = ''
                 cp -rs ${cargo-config}/{.cargo,gen} .
@@ -175,7 +192,7 @@
               overrides = aapt2LinuxJars;
             };
           # https://developer.android.com/build/building-cmdline#sign_cmdline
-          aligned = pkgs.runCommand "aligned.apk" {} ''
+          aligned = pkgs.runCommand "aligned.apk" { } ''
             ${build-tools-dir}/zipalign -f -v -p 4 ${apk}/universal/release/app-universal-release-unsigned.apk aligned.apk
             mv aligned.apk $out
           '';
